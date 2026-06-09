@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>IT Ticket Assigner</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 750px; margin: 40px auto; padding: 0 16px; }
+    textarea { width: 100%; height: 80px; font-size: 14px; padding: 8px; box-sizing: border-box; }
+    button { margin-top: 8px; margin-right: 8px; padding: 8px 20px; font-size: 14px; cursor: pointer; }
+    #error { color: red; margin-top: 6px; font-size: 13px; }
+
+    /* Schedule panel */
+    #schedule-panel { border: 1px solid #ddd; border-radius: 6px; padding: 14px 16px; margin-bottom: 20px; background: #fafafa; }
+    #schedule-panel h3 { margin: 0 0 10px; font-size: 15px; }
+    .sched-row { display: flex; align-items: center; margin-bottom: 8px; gap: 10px; }
+    .sched-name { width: 80px; font-size: 13px; font-weight: bold; }
+    .sched-loc { font-size: 13px; width: 130px; }
+    .sched-loc select { font-size: 13px; padding: 2px 6px; }
+    .ooo-label { font-size: 12px; color: #888; display: flex; align-items: center; gap: 4px; margin-left: 16px; }
+    .ooo-label input { margin: 0; }
+    #schedule-save { font-size: 12px; padding: 4px 12px; margin-top: 6px; }
+
+    /* Suggestion section */
+    #suggest-section { margin-top: 24px; border-top: 1px solid #ccc; padding-top: 16px; display: none; }
+    #suggest-section h3 { margin: 0 0 4px; font-size: 15px; display: inline-block; }
+    .tech-card { border: 1px solid #ddd; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; background: #fff; cursor: pointer; transition: background 0.15s; }
+    .tech-card:hover { background: #f5f5f5; }
+    .tech-card .tech-name { font-weight: bold; font-size: 14px; }
+    .tech-card .tech-reason { font-size: 13px; color: #444; margin-top: 3px; }
+    .tech-card .tech-title { font-size: 12px; color: #888; }
+    .tech-card .tech-loc { font-size: 11px; color: #888; margin-top: 2px; }
+    .best-match { border-color: #2a7ae2; background: #f0f6ff; }
+    .best-match:hover { background: #e6f0ff; }
+    .best-match .tech-name::after { content: ' ⭐'; font-size: 11px; }
+    .ooo-card { opacity: 0.45; border-color: #ccc; background: #f5f5f5; cursor: default; }
+    .ooo-card:hover { background: #f5f5f5; }
+
+    /* Output section */
+    #output-section { margin-top: 24px; border-top: 1px solid #ccc; padding-top: 16px; display: none; }
+    #output-section h3 { margin: 0 0 8px; font-size: 15px; }
+    #output { padding: 10px; background: #f0f0f0; font-size: 14px; word-break: break-all; }
+    #status { color: green; margin-top: 6px; font-size: 13px; }
+
+    /* Child tickets section */
+    #child-section { margin-top: 24px; border-top: 1px solid #ccc; padding-top: 16px; display: none; }
+    #child-section h3 { margin: 0 0 8px; font-size: 15px; }
+    .child-card { border: 1px solid #e0c97f; border-radius: 6px; padding: 10px 14px; margin-bottom: 8px; background: #fffdf0; }
+    .child-card .child-task { font-weight: bold; font-size: 13px; }
+    .child-card .child-assign { font-size: 12px; color: #555; margin-top: 3px; }
+    .child-card .child-output { font-size: 13px; background: #f5f0d0; padding: 6px 8px; margin-top: 6px; border-radius: 4px; word-break: break-all; }
+    .child-copy-btn { font-size: 11px; padding: 3px 8px; margin-top: 6px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <img src="Pleasants logo.png" alt="Pleasants Logo" style="max-width:40%;display:block;margin:0 auto 12px auto;">
+  <h2 style="color:#C41230;">Smart Assign IT</h2>
+
+  <!-- Schedule Panel -->
+  <div id="schedule-panel">
+    <h3>📍 Technician List</h3>
+    <div id="sched-rows"></div>
+    <button id="schedule-save" onclick="saveSchedule()">Save Schedule</button>
+    <span id="sched-saved" style="font-size:12px;color:green;margin-left:8px;"></span>
+  </div>
+
+  <!-- Ticket Input -->
+  <label>Paste ticket row:</label><br>
+  <textarea id="input" placeholder="Paste copied ticket row here..."></textarea><br>
+  <label style="display:block;margin-top:12px;">Client summary <span style="color:#888;font-weight:normal;font-size:12px;">(provides context for optimal matching)</span></label>
+  <textarea id="client-summary" placeholder="Paste or type any additional detail from the client here..."></textarea><br>
+  <div style="margin-top:10px;margin-bottom:6px;font-size:13px;font-weight:bold;">Client location</div>
+  <select id="client-loc" style="font-size:13px;padding:4px 8px;margin-bottom:10px;">
+    <option value="Clarksburg">Clarksburg - General Assignment</option>
+    <option value="Frederick">Frederick - General Assignment</option>
+    <optgroup label="Clarksburg">
+      <option value="Clarksburg">C&amp;D – Clarksburg</option>
+      <option value="Clarksburg">Core Development</option>
+      <option value="Clarksburg">EAI HQ Fleet/Shop</option>
+      <option value="Clarksburg">EAI HQ – General</option>
+      <option value="Clarksburg">Pleasants Companies Accounting</option>
+      <option value="Clarksburg">Pleasants Companies Executive</option>
+      <option value="Clarksburg">Pleasants Companies General</option>
+      <option value="Clarksburg">Pleasants Companies IT Infrastructure</option>
+      <option value="Clarksburg">Pleasants Companies Safety</option>
+      <option value="Clarksburg">Pleasants Companies Talent Management</option>
+      <option value="Clarksburg">Pleasants Development</option>
+      <option value="Clarksburg">Pleasants Construction Welding Shop</option>
+    </optgroup>
+    <optgroup label="Frederick – New Head Quarters">
+      <option value="Frederick - NHQ">Pleasants Construction General</option>
+      <option value="Frederick - NHQ">Pleasants Construction Estimating</option>
+      <option value="Frederick - NHQ">Pleasants Construction GPS</option>
+      <option value="Frederick - NHQ">Pleasants Construction Field Ops</option>
+      <option value="Frederick - NHQ">Pleasants Construction Project Management</option>
+    </optgroup>
+    <optgroup label="Frederick – Paving">
+      <option value="Frederick - Paving">Pleasants Construction PCI/Fleet Shop</option>
+      <option value="Frederick - Paving">Pleasants Construction Plant</option>
+      <option value="Frederick - Paving">Pleasants Construction Rehab</option>
+      <option value="Frederick - Paving">Pleasants Construction Soils</option>
+    </optgroup>
+  </select>
+  <br>
+  <button onclick="suggestTech()">Suggest Technician</button>
+  <button onclick="clearAll()">Clear</button>
+  <div id="error"></div>
+
+  <!-- Suggestions -->
+  <div id="suggest-section">
+    <h3>Select a Technician</h3>
+    <div id="suggestions"></div>
+  </div>
+
+  <!-- Output -->
+  <div id="output-section">
+    <h3>Output</h3>
+    <div id="output"></div>
+    <div id="status"></div>
+  </div>
+
+  <!-- Child Tickets -->
+  <div id="child-section">
+    <h3>📋 Suggested Child Tickets</h3>
+    <div id="child-tickets"></div>
+  </div>
+
+  <script>
+    const WORKLOAD_KEY = 'techWorkload';
+    const SCHEDULE_KEY = 'techSchedule';
+    const TODAY = new Date();
+
+    const defaultLocations = {
+      Folliot:  'Clarksburg',
+      Stacey:   'Clarksburg',
+      Marshall: 'Clarksburg',
+      Curbeam:  'Clarksburg',
+      Sanchez:  'Clarksburg',
+      James:    'Frederick - NHQ',
+      Stevens:  'Clarksburg'
+    };
+
+    const rotatingTechs = ['Curbeam', 'Stevens'];
+
+    const techInfo = {
+      Folliot:  { atName: '@Jason Folliot',  title: 'Manager',           rank: 1 },
+      Stacey:   { atName: '@2.0',            title: 'Systems Admin',     rank: 2 },
+      Marshall: { atName: '@Jacob Marshall', title: 'Server Technician', rank: 3 },
+      Curbeam:  { atName: '@Michael Curbeam',title: 'IT Support',        rank: 4 },
+      Sanchez:  { atName: '@Max Sanchez',    title: 'IT Support',        rank: 5 },
+      James:    { atName: '@Daniel',         title: 'IT Support',        rank: 6 },
+      Stevens:  { atName: '@Chris Stevens',  title: 'IT Support',        rank: 7 }
+    };
+
+    const generalPool = ['Marshall', 'Curbeam', 'Sanchez', 'James', 'Stevens'];
+
+    function getSchedule() {
+      try { return JSON.parse(localStorage.getItem(SCHEDULE_KEY)) || {}; }
+      catch { return {}; }
+    }
+    function saveSchedule() {
+      const sched = {};
+      for (const name of Object.keys(techInfo)) {
+        const locEl = document.getElementById(`loc-${name}`);
+        const oooEl = document.getElementById(`ooo-${name}`);
+        sched[name] = {
+          location: locEl ? locEl.value : defaultLocations[name],
+          ooo: oooEl ? oooEl.checked : false
+        };
+      }
+      localStorage.setItem(SCHEDULE_KEY, JSON.stringify(sched));
+      document.getElementById('sched-saved').textContent = 'Saved!';
+      setTimeout(() => document.getElementById('sched-saved').textContent = '', 2000);
+    }
+
+    function getTechStatus(name) {
+      const sched = getSchedule();
+      if (sched[name]) return sched[name];
+      return { location: defaultLocations[name], ooo: false };
+    }
+
+    function buildSchedulePanel() {
+      const sched = getSchedule();
+      const container = document.getElementById('sched-rows');
+      container.innerHTML = '';
+
+      for (const name of Object.keys(techInfo)) {
+        const saved = sched[name] || { location: defaultLocations[name], ooo: false };
+
+        const row = document.createElement('div');
+        row.className = 'sched-row';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'sched-name';
+        nameSpan.textContent = name;
+
+        const locSpan = document.createElement('span');
+        locSpan.className = 'sched-loc';
+
+        if (rotatingTechs.includes(name)) {
+          const sel = document.createElement('select');
+          sel.id = `loc-${name}`;
+          ['Clarksburg', 'Frederick - NHQ', 'Frederick - Paving'].forEach(loc => {
+            const opt = document.createElement('option');
+            opt.value = loc;
+            opt.textContent = loc;
+            if (saved.location === loc) opt.selected = true;
+            sel.appendChild(opt);
+          });
+          locSpan.appendChild(sel);
+        } else {
+          const fixedLoc = defaultLocations[name];
+          locSpan.textContent = fixedLoc;
+          const hidden = document.createElement('input');
+          hidden.type = 'hidden';
+          hidden.id = `loc-${name}`;
+          hidden.value = fixedLoc;
+          locSpan.appendChild(hidden);
+        }
+
+        const oooLabel = document.createElement('label');
+        oooLabel.className = 'ooo-label';
+        const oooCheck = document.createElement('input');
+        oooCheck.type = 'checkbox';
+        oooCheck.id = `ooo-${name}`;
+        oooCheck.checked = saved.ooo || false;
+        oooLabel.appendChild(oooCheck);
+        oooLabel.appendChild(document.createTextNode('Out Of Office'));
+
+        row.appendChild(nameSpan);
+        row.appendChild(locSpan);
+        row.appendChild(oooLabel);
+        container.appendChild(row);
+      }
+    }
+
+    function getWorkload() {
+      try { return JSON.parse(localStorage.getItem(WORKLOAD_KEY)) || {}; }
+      catch { return {}; }
+    }
+    function incrementWorkload(name) {
+      const wl = getWorkload();
+      wl[name] = (wl[name] || 0) + 1;
+      localStorage.setItem(WORKLOAD_KEY, JSON.stringify(wl));
+    }
+
+    function daysSince(dateStr) {
+      const d = new Date(dateStr);
+      return Math.floor((TODAY - d) / 86400000);
+    }
+
+    const categories = [
+      {
+        name: 'Account Locked/Login Issues',
+        keywords: ['locked out', 'account locked', 'unlock account', 'lock out', "cannot log in", "can't log in", 'login issues', 'locked account'],
+        techHistory: {
+          Curbeam:  { lastDone: '2026-05-26', primary: true },
+          Stevens:  { lastDone: '2026-05-26', primary: false },
+          James:    { lastDone: '2026-01-15', primary: false }
+        }
+      },
+      {
+        name: 'Application/Software Errors',
+        keywords: ['macro', 'excel', 'unblock', 'trust center', 'security settings', 'workbook','foxit', "won't save", 'unable to save', 'application error', 'not responding', 'error message', 'crashing', 'freezing', "won't open", 'cannot open', 'app not working', 'software not working', 'program not working', 'program error', 'program frozen'],
+        techHistory: {
+          James:    { lastDone: '2026-06-09', primary: true },
+          Stevens:  { lastDone: '2026-06-09', primary: true },
+          Curbeam:  { lastDone: '2026-06-09', primary: true }
+        }
+      },
+      {
+        name: 'Agtek/Gradework',
+        keywords: ['agtek', 'gradework', 'agtek gradework'],
+        techHistory: {
+          James:    { lastDone: '2026-06-01', primary: true }
+        }
+      },
+      {
+        name: 'Bluebeam',
+        keywords: ['bluebeam', 'bluebeam update', 'bluebeam license', 'bluebeam renewal', 'bluebeam not working', 'install bluebeam'],
+        techHistory: {
+          James:    { lastDone: '2026-05-20', primary: true },
+          Folliot:  { lastDone: '2026-03-10', primary: false }
+        }
+      },
+      {
+        name: 'Cameras/Security',
+        keywords: ['camera', 'nvr', 'dvr', 'camera install', 'camera access', 'security camera', 'camera playback', 'avigilon', 'silo camera', 'camera view'],
+        techHistory: {
+          Marshall: { lastDone: '2026-05-27', primary: true },
+          Curbeam:  { lastDone: '2026-05-05', primary: false },
+          Stevens:  { lastDone: '2026-05-06', primary: false }
+        }
+      },
+      {
+        name: 'Citrix',
+        keywords: ['citrix', 'remote desktop', 'vda', 'citrix frozen', 'citrix not working', 'citrix login', 'citrix workspace', 'citrix desktop', 'citrix session', 'cannot access citrix'],
+        techHistory: {
+          Sanchez:  { lastDone: '2026-06-02', primary: true },
+          Curbeam:  { lastDone: '2026-06-01', primary: true },
+          Marshall: { lastDone: '2026-05-29', primary: false },
+          Stacey:   { lastDone: '2026-05-28', primary: true },
+          Stevens:  { lastDone: '2026-05-14', primary: false },
+          James:    { lastDone: '2026-05-12', primary: false }
+        }
+      },
+      {
+        name: 'Dropbox',
+        keywords: ['dropbox', 'foreman dropbox', 'dropbox foreman', 'dropbox logged out', 'dropbox access', 'dropbox on ipad'],
+        techHistory: {
+          James:    { lastDone: '2026-04-28', primary: true },
+          Curbeam:  { lastDone: '2026-03-05', primary: false }
+        }
+      },
+      {
+        name: 'Email Issues',
+        keywords: ['junk','email blocked', 'strange','not receiving email', 'receiving','recieving','emails not coming', 'email not received', 'email issue', 'email not going', 'blocked email', 'email address access', 'dispatch email', 'email on ipad', 'email on phone', 'email setup', 'email forwarding', 'email signed out', "email won't connect",'auto reply', 'email bounce', "email doesn't exist", 'does not exist', 'undeliverable', 'bounced email', 'mail delivery', 'not exist', 'no longer exists'],
+        techHistory: {
+          Curbeam:  { lastDone: '2026-06-01', primary: true },
+          Stacey:   { lastDone: '2026-06-02', primary: true },
+          Marshall: { lastDone: '2026-06-02', primary: true },
+          Stevens:  { lastDone: '2026-06-01', primary: false },
+          James:    { lastDone: '2026-05-19', primary: false }
+        }
+      },
+      {
+        name: 'File/Folder Access & Recovery',
+        keywords: ['recovery','recover','previous', '401k files', 'file permissions', 'file recovery', 'recover files', 'restore file', 'missing file', 'file access', 'folder access', 'permissions', 'network drive', 'q drive', 'o drive', 'p drive', 'g drive', 'i drive', 'estimating drive', 'file explorer'],
+        techHistory: {
+          Folliot:  { lastDone: '2026-06-01', primary: true },
+          James:    { lastDone: '2026-05-29', primary: false }
+        }
+      },
+      {
+        name: 'HCSS/E360/360',
+        keywords: ['hcss', 'e360', '360 mechanic', 'fueler plus', 'heavyjob manager', 'hj manager', 'hcss renewal', 'eq360'],
+        techHistory: {
+          Sanchez:  { lastDone: '2026-06-01', primary: true },
+          James:    { lastDone: '2026-05-21', primary: false }
+        }
+      },
+      {
+        name: 'HeavyBid/HeavyJob',
+        keywords: ['heavybid', 'heavy bid', 'heavyjob', 'heavy job', 'hj ', 'hj error', 'hj app', 'heavybid locked', 'heavybid frozen'],
+        techHistory: {
+          Sanchez:  { lastDone: '2026-06-01', primary: true },
+          James:    { lastDone: '2026-05-27', primary: true },
+          Curbeam:  { lastDone: '2026-05-03', primary: false }
+        }
+      },
+      {
+        name: 'Laptops',
+        keywords: ['loaner laptop', 'tough','tough book','book','laptop','loaner laptop needed', 'charge', 'issue laptop', 'deploy laptop', 'need a laptop', 'laptop needed'],
+        techHistory: {
+          Marshall: { lastDone: '2026-02-05', primary: true },
+          Curbeam:  { lastDone: '2026-05-21', primary: false },
+          James:    { lastDone: '2026-06-01', primary: true },
+        }
+      },
+      {
+        name: 'MFP/Email Assistance',
+        keywords: ['mfp', 'assistance with mfp', 'mfp emails'],
+        techHistory: {
+          Marshall: { lastDone: '2026-06-02', primary: true }
+        }
+      },
+      {
+        name: 'Mobile Devices/Phones/iPads',
+        keywords: ['ipad', 'iphone', 'cell phone', 'mobile', 'sim card', 'phone upgrade', 'new phone', 'tablet', 'phone setup', 'phone charger', 'cell service', 'ipad cell', 'ipad no service', 'dropbox on phone', 'phone frozen', 'apple account', 'icloud','stylus','case'],
+        techHistory: {
+          James:    { lastDone: '2026-06-01', primary: true },
+          Curbeam:  { lastDone: '2026-05-27', primary: false },
+          Stevens:  { lastDone: '2026-05-21', primary: true },
+          Marshall: { lastDone: '2026-05-28', primary: false }
+        }
+      },
+      {
+        name: 'Mobile Line Management',
+        keywords: ['mobile line', 'mobile lines', 'verizon line', 'at&t line', 'disconnect line', 'cancel line', 'mobile allocation', 'verizon allocation', 'at&t allocation', 'info on mobile', 'line review', 'no usage line', 'disconnect unused'],
+        techHistory: {
+          Stevens:  { lastDone: '2026-06-02', primary: true },
+          James:    { lastDone: '2026-05-14', primary: false }
+        }
+      },
+      {
+        name: 'Monitors',
+        keywords: ['monitor not working', 'dual monitor', 'second monitor', 'monitor setup', 'monitor mount', 'left monitor', 'monitor blacked', 'monitor issues', 'monitors needed', 'new monitor', 'need monitor'],
+        techHistory: {
+          Sanchez:  { lastDone: '2026-05-13', primary: true },
+          Stevens:  { lastDone: '2026-05-11', primary: false },
+          James:    { lastDone: '2026-05-15', primary: false }
+        }
+      },
+      {
+        name: 'MyAssistant',
+        keywords: ['myassistant', 'my assistant', 'pay statements', 'my assistant not', 'my assistant is not'],
+        techHistory: {
+          Sanchez:  { lastDone: '2026-05-27', primary: true },
+          Curbeam:  { lastDone: '2026-05-27', primary: false }
+        }
+      },
+      {
+        name: 'Networking/Infrastructure',
+        keywords: ['wifi', 'ssid', 'network port', 'cabling', 'wiring', 'ethernet cable', 'cable run', 'access point', 'network equipment', 'network switch', 'fortigate', 'fortinet', 'fiber', 'gbic', 'server rack', 'server room', 'comcast', 'internet down', 'internet not working'],
+        techHistory: {
+          Marshall: { lastDone: '2026-05-28', primary: true },
+          Stevens:  { lastDone: '2026-06-01', primary: false },
+          Stacey:   { lastDone: '2026-05-29', primary: false }
+        }
+      },
+      {
+        name: 'New Employee Setup',
+        keywords: ['new employee', 'new hire', 'it onboarding', 'new hire setup', 'account set up', 'employee setup'],
+        techHistory: {
+          Curbeam:  { lastDone: '2026-05-26', primary: true },
+          Marshall: { lastDone: '2026-05-29', primary: false },
+          James:    { lastDone: '2026-05-19', primary: false },
+          Stacey:   { lastDone: '2026-01-05', primary: true }
+        }
+      },
+      {
+        name: 'New Foreman Setup',
+        keywords: ['new foreman', 'foreman starting', 'setup with phone', 'setup with ipad', 'foreman phone', 'foreman ipad'],
+        techHistory: {
+          Curbeam:  { lastDone: '2026-05-14', primary: true },
+          James:    { lastDone: '2026-05-14', primary: true },
+          Sanchez:  { lastDone: '2026-05-14', primary: true }
+        }
+      },
+      {
+        name: 'PC/Hardware Setup & Office Moves',
+        keywords: ['pc setup', 'new pc', 'desktop setup', 'office setup','keyboard','mouse','move computer', 'relocate pc', 'move office', 'office move', 'moving offices', 'new computer', 'workstation setup', 'setup office', 'setup hardware', 'setup desktop', 'ram', 'gb', 'memory'],
+        techHistory: {
+          Stevens:  { lastDone: '2026-05-29', primary: true },
+          James:    { lastDone: '2026-05-29', primary: true },
+          Marshall: { lastDone: '2026-05-18', primary: false },
+          Curbeam:  { lastDone: '2026-05-22', primary: false }
+        }
+      },
+      {
+        name: 'Phishing/Scam/Spam',
+        keywords: ['phish', 'scam', 'spam', 'suspicious email', 'sketchy email', 'fraudulent email', 'fake email', 'potential phishing', 'spoofing'],
+        techHistory: {
+          Marshall: { lastDone: '2026-06-02', primary: true },
+          Stacey:   { lastDone: '2026-04-24', primary: true },
+          Folliot:  { lastDone: '2026-04-22', primary: false }
+        }
+      },
+      {
+        name: 'Phones/MiVoice/IP Phone',
+        keywords: ['mivoice', '250 system', 'ip phone', 'phone line', 'attendant console', 'phone system', 'phone extension', 'desk phone', 'phone configuration', 'digital phone', 'office phone', 'change', 'name', 'address book', 'book'],
+        techHistory: {
+          Curbeam:  { lastDone: '2026-06-02', primary: true },
+          Stevens:  { lastDone: '2026-06-01', primary: true }
+        }
+      },
+      {
+        name: 'Planswift',
+        keywords: ['planswift', 'planswift license', 'planswift error', 'pc lockup planswift', 'planswift not activating'],
+        techHistory: {
+          James:    { lastDone: '2026-06-01', primary: true },
+          Curbeam:  { lastDone: '2026-02-13', primary: false },
+          Sanchez:  { lastDone: '2026-05-28', primary: false }
+        }
+      },
+      {
+        name: 'Printers/Scanners/Copiers/Toner',
+        keywords: ['printer', 'toner', 'copier', 'scanner', 'kip', 'print from citrix', 'cannot print', 'printing', 'paper jam', 'plotter'],
+        techHistory: {
+          Curbeam:  { lastDone: '2026-06-01', primary: true },
+          Stevens:  { lastDone: '2026-05-27', primary: true },
+          Marshall: { lastDone: '2026-04-29', primary: false },
+          Sanchez:  { lastDone: '2026-05-04', primary: false },
+          James:    { lastDone: '2026-05-11', primary: false }
+        }
+      },
+      {
+        name: 'Purchasing Hardware',
+        keywords: ['purchase computer', 'purchase laptop', 'purchase monitor', 'order desktop', 'order laptop', 'order monitor', 'purchase pc', 'order workstation', 'new workstation','new laptop'],
+        techHistory: {
+          Marshall: { lastDone: '2026-05-29', primary: true },
+          Curbeam:  { lastDone: '2026-05-04', primary: false }
+        }
+      },
+      {
+        name: 'QuickBooks',
+        keywords: ['quickbooks', 'qb ', 'qb error', 'qb login', 'h202', 'h 202', 'quickbook', 'multi user hosting', 'quickbooks ini', 'quickbooks update', 'quickbooks will not'],
+        techHistory: {
+          Curbeam: { lastDone: '2026-06-01', primary: true },
+          Folliot:  { lastDone: '2026-05-18', primary: false },
+          Stacey:   { lastDone: '2026-04-21', primary: false }
+        }
+      },
+      {
+        name: 'Scales/Meters/MDOT',
+        keywords: ['scale', 'scale house', 'meter reading', 'mdot scale', 'ritchie scale', 'scale not reading'],
+        techHistory: {
+          Curbeam:  { lastDone: '2026-05-28', primary: true }
+        }
+      },
+      {
+        name: 'Server/VM/Backup',
+        keywords: ['server', 'hyperv', 'hyper-v', 'vm ', 'vm access', 'virtual machine', 'veeam', 'datto', 'backup', 'synology', 'snapshot', 'xen', 'colo', 'netapp', 'server updates'],
+        techHistory: {
+          Folliot:  { lastDone: '2026-05-18', primary: true },
+          Stacey:   { lastDone: '2026-06-01', primary: true },
+          Curbeam:  { lastDone: '2026-06-10', primary: true },
+          James:    { lastDone: '2026-06-01', primary: false },
+          Stevens:  { lastDone: '2026-06-01', primary: false },
+          Marshall: { lastDone: '2026-05-28', primary: false }
+        }
+      },
+      {
+        name: 'Software Licensing/Adobe/O365',
+        keywords: ['adobe license', 'software license', 'adobe pro', 'adobe pro license', 'office 365 license', 'teams license', 'bluebeam license', 'planswift license', 'license', 'foxit license', 'install adobe', 'adobe install', 'o365 license'],
+        techHistory: {
+          Folliot:  { lastDone: '2026-05-26', primary: true },
+          Stacey:   { lastDone: '2026-01-05', primary: false },
+          Stevens:  { lastDone: '2026-05-20', primary: false }
+        }
+      },
+      {
+        name: 'Terminations',
+        keywords: ['termination', 'terminated', 'remove from hj', 'remove immediately', 'no longer works', 'reline america termination', 'employee resignation'],
+        techHistory: {
+          Sanchez:  { lastDone: '2026-05-29', primary: true },
+          James:    { lastDone: '2026-06-08', primary: true },
+          Stevens:  { lastDone: '2026-05-29', primary: false }
+        }
+      },
+      {
+        name: 'Timberline/Timberscan',
+        keywords: ['timberline', 'timberscan', 'timber scan', 'timber line', 'sage 300'],
+        techHistory: {
+          Curbeam:  { lastDone: '2026-06-01', primary: true },
+          Sanchez:  { lastDone: '2026-05-08', primary: false },
+          Stacey:   { lastDone: '2026-05-29', primary: false },
+          Stevens:  { lastDone: '2026-05-27', primary: false },
+          James:    { lastDone: '2026-05-05', primary: false }
+        }
+      },
+      {
+        name: 'Trux',
+        keywords: ['trux', 'trux issues', 'trux account', 'trux credentials', 'trux access', 'trux locked'],
+        techHistory: {
+          Marshall: { lastDone: '2026-05-26', primary: true },
+          Curbeam:  { lastDone: '2026-04-20', primary: false },
+          Stacey:   { lastDone: '2026-05-20', primary: false }
+        }
+      },
+      {
+        name: 'Windows/OS/Golden Image',
+        keywords: ['windows 11', 'golden image', 'windows install', 'windows update', 'os install', 'image maintenance', 're-imaged', 'reimaged', 'firmware', 'bios', 'stuck on update', 'laptop stuck on', 'laptop frozen', 'computer updating', 'laptop update', 'updating screen'],
+        techHistory: {
+          Curbeam:  { lastDone: '2026-06-02', primary: true },
+          Stevens:  { lastDone: '2026-06-01', primary: true }
+        }
+      }
+    ];
+
+    // ── Child ticket keywords ──
+    const newHireKeywords   = ['new hire', 'new employee', 'new foreman', 'foreman starting', 'starts on', 'starting on', 'onboarding', 'new pm', 'new estimator', 'new director', 'set up', 'setup for', 'setting up'];
+    const mobileKeywords    = ['phone', 'iphone', 'ipad', 'mobile device', 'tablet'];
+    const hardwareKeywords  = ['laptop', 'desktop', 'pc', 'computer', 'workstation', 'monitors', 'peripherals'];
+
+    function buildChildTickets(matchText, ticketNum, requester) {
+      const sl = matchText.toLowerCase();
+      const isNewHire = newHireKeywords.some(k => sl.includes(k));
+      if (!isNewHire) return [];
+
+      const hasMobile   = mobileKeywords.some(k => sl.includes(k));
+      const hasHardware = hardwareKeywords.some(k => sl.includes(k));
+
+      const children = [];
+
+      if (hasMobile) {
+        children.push({
+          task: 'Setup Phone / iPad',
+          tech: 'James',
+          output: `${ticketNum} ${requester} Setup Phone / iPad ${techInfo['James'].atName}`
+        });
+      }
+
+      if (hasHardware) {
+        children.push({
+          task: 'Order Laptop / Desktop / PC',
+          tech: 'Marshall',
+          output: `${ticketNum} ${requester} Order Laptop / Desktop / PC ${techInfo['Marshall'].atName}`
+        });
+        children.push({
+          task: 'Setup Laptop / Desktop / PC',
+          tech: 'Stevens',
+          output: `${ticketNum} ${requester} Setup Laptop / Desktop / PC ${techInfo['Stevens'].atName}`
+        });
+      }
+
+      return children;
+    }
+
+    function renderChildTickets(children) {
+      const section = document.getElementById('child-section');
+      const container = document.getElementById('child-tickets');
+      container.innerHTML = '';
+
+      if (!children.length) {
+        section.style.display = 'none';
+        return;
+      }
+
+      children.forEach(child => {
+        const card = document.createElement('div');
+        card.className = 'child-card';
+
+        const taskDiv = document.createElement('div');
+        taskDiv.className = 'child-task';
+        taskDiv.textContent = child.task;
+
+        const assignDiv = document.createElement('div');
+        assignDiv.className = 'child-assign';
+        assignDiv.textContent = `Assign to: ${child.tech} (${techInfo[child.tech].atName})`;
+
+        const outputDiv = document.createElement('div');
+        outputDiv.className = 'child-output';
+        outputDiv.textContent = child.output;
+
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'child-copy-btn';
+        copyBtn.textContent = 'Copy';
+        copyBtn.onclick = () => {
+          navigator.clipboard.writeText(child.output).then(() => {
+            copyBtn.textContent = 'Copied!';
+            setTimeout(() => copyBtn.textContent = 'Copy', 2000);
+          }).catch(() => {
+            copyBtn.textContent = 'Copy manually';
+          });
+        };
+
+        card.appendChild(taskDiv);
+        card.appendChild(assignDiv);
+        card.appendChild(outputDiv);
+        card.appendChild(copyBtn);
+        container.appendChild(card);
+      });
+
+      section.style.display = 'block';
+    }
+
+    let pendingTicket = null;
+
+    function parseSummary() {
+      const raw = document.getElementById('input').value.trim();
+      if (!raw) return null;
+      const text = raw.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+      const fullPattern = /^(T\d+)\s+\d{1,2}\/\d{1,2}\/\d{4},\s*\d{1,2}:\d{2}:\d{2}\s*[AP]M\s+(.+?)\s+(.+?)(?:\s+(?:Low|Medium|High|Critical|Emergency))?$/i;
+      const match = text.match(fullPattern);
+      if (match) return { ticketNum: match[1], requester: match[2].trim(), summary: match[3].trim() };
+      return null;
+    }
+
+    function scoreForSummary(summary) {
+      const sl = summary.toLowerCase();
+      const techScores = {};
+      for (const name of Object.keys(techInfo)) {
+        techScores[name] = { skillScore: 0, recencyBonus: 0, matchedCategories: [] };
+      }
+      for (const cat of categories) {
+        const matched = cat.keywords.some(kw => sl.includes(kw.toLowerCase()));
+        if (!matched) continue;
+        for (const [techName, hist] of Object.entries(cat.techHistory)) {
+          if (!techScores[techName]) continue;
+          techScores[techName].skillScore += hist.primary ? 3 : 1;
+          techScores[techName].matchedCategories.push(cat.name);
+          const days = daysSince(hist.lastDone);
+          if (days <= 30) techScores[techName].recencyBonus += 0.5;
+          else if (days <= 90) techScores[techName].recencyBonus += 0.2;
+        }
+      }
+      return techScores;
+    }
+
+    function suggestTech() {
+      document.getElementById('error').textContent = '';
+      document.getElementById('suggestions').innerHTML = '';
+      document.getElementById('suggest-section').style.display = 'none';
+      document.getElementById('output-section').style.display = 'none';
+      document.getElementById('child-section').style.display = 'none';
+
+      const parsed = parseSummary();
+      if (!parsed) {
+        const raw = document.getElementById('input').value.trim();
+        if (!raw) { document.getElementById('error').textContent = 'Please paste ticket text first.'; return; }
+        document.getElementById('error').textContent = 'Could not parse ticket. Make sure the format is correct.';
+        return;
+      }
+
+      pendingTicket = parsed;
+      const clientSummary = document.getElementById('client-summary').value.trim();
+      const matchText = (parsed.summary + ' ' + clientSummary).trim();
+      const sl = matchText.toLowerCase();
+
+      const clientLoc = document.getElementById('client-loc').value;
+
+      const isPhishing = ['phish','strange', 'scam', 'spam', 'suspicious email', 'sketchy email', 'fraudulent email', 'fake email', 'spoofing', 'malicious', 'malware', 'docusign'].some(k => sl.includes(k));
+      if (isPhishing) {
+        renderSuggestions([
+          { name: 'Marshall', matchedCategories: ['Phishing/Scam/Spam'], note: 'Primary handler' },
+          { name: 'Stacey',   matchedCategories: [], note: 'Escalate if Marshall unavailable' },
+          { name: 'Folliot',  matchedCategories: [], note: 'Final escalation' }
+        ]);
+        return;
+      }
+
+      const scores = scoreForSummary(matchText);
+
+      const ranked = Object.entries(scores)
+        .map(([name, s]) => ({ name, ...s }))
+        .sort((a, b) => {
+          const aLoc = getTechStatus(a.name).location;
+          const bLoc = getTechStatus(b.name).location;
+          const aMatch = aLoc === clientLoc || (clientLoc === 'Frederick' && aLoc.startsWith('Frederick')) ? 1 : 0;
+          const bMatch = bLoc === clientLoc || (clientLoc === 'Frederick' && bLoc.startsWith('Frederick')) ? 1 : 0;
+          if (bMatch !== aMatch) return bMatch - aMatch;
+          if (b.skillScore !== a.skillScore) return b.skillScore - a.skillScore;
+          if (b.recencyBonus !== a.recencyBonus) return b.recencyBonus - a.recencyBonus;
+          return techInfo[b.name].rank - techInfo[a.name].rank;
+        });
+
+      const isPrint = ['print', 'printer', 'toner', 'copier', 'scanner', 'kip', 'plotter', 'paper jam'].some(k => sl.includes(k));
+      if (isPrint) {
+        const curbeam = ranked.find(t => t.name === 'Curbeam') || { name: 'Curbeam', matchedCategories: [] };
+        const rest = ranked.filter(t => t.name !== 'Curbeam');
+        renderSuggestions([curbeam, ...rest].slice(0, 3));
+        return;
+      }
+
+      const isReline = sl.includes('reline');
+      if (isReline) {
+        const curbeam = ranked.find(t => t.name === 'Curbeam') || { name: 'Curbeam', matchedCategories: [] };
+        const rest = ranked.filter(t => t.name !== 'Curbeam');
+        renderSuggestions([curbeam, ...rest].slice(0, 3));
+        return;
+      }
+
+      const isQBUpdate = (sl.includes('quickbooks') || sl.includes('quickbook') || sl.includes('qb ')) && (sl.includes('update') || sl.includes('updates'));
+      if (isQBUpdate) {
+        const folliot = ranked.find(t => t.name === 'Folliot') || { name: 'Folliot', matchedCategories: ['QuickBooks'] };
+        const rest = ranked.filter(t => t.name !== 'Folliot');
+        renderSuggestions([folliot, ...rest].slice(0, 3));
+        return;
+      }
+
+      const isTermination = ['termination', 'terminated', 'remove from hj', 'remove immediately', 'no longer works', 'employee resignation'].some(k => sl.includes(k));
+      if (isTermination) {
+        const sanchezOOO = getTechStatus('Sanchez').ooo;
+        const primary = sanchezOOO ? 'James' : 'Sanchez';
+        const primaryTech = ranked.find(t => t.name === primary) || { name: primary, matchedCategories: ['Terminations'] };
+        const rest = ranked.filter(t => t.name !== primary);
+        renderSuggestions([primaryTech, ...rest].slice(0, 3));
+        return;
+      }
+
+      const withSkill = ranked.filter(t => t.skillScore > 0 && !getTechStatus(t.name).ooo);
+
+      let picks = [];
+      if (clientLoc) {
+        const isMatch = (techName) => {
+          const loc = getTechStatus(techName).location;
+          return loc === clientLoc || (clientLoc === 'Frederick' && loc.startsWith('Frederick'));
+        };
+        const atLocation = withSkill.filter(t => isMatch(t.name));
+        const notAtLocation = withSkill.filter(t => !isMatch(t.name));
+        const seen = new Set();
+        picks = [...atLocation, ...notAtLocation].filter(t => seen.has(t.name) ? false : seen.add(t.name)).slice(0, 3);
+      } else {
+        picks = [...withSkill.slice(0, 3)];
+      }
+
+      if (picks.length < 3) {
+        const filler = ranked
+          .filter(t => generalPool.includes(t.name) && !picks.some(p => p.name === t.name) && t.name !== picks[0]?.name && !getTechStatus(t.name).ooo)
+          .sort((a, b) => techInfo[b.name].rank - techInfo[a.name].rank);
+        for (const t of filler) {
+          if (picks.length >= 3) break;
+          if (!picks.some(p => p.name === t.name)) picks.push(t);
+        }
+      }
+
+      renderSuggestions(picks);
+    }
+
+    function renderSuggestions(list) {
+      const container = document.getElementById('suggestions');
+
+      list.forEach((item, i) => {
+        const info = techInfo[item.name];
+        const status = getTechStatus(item.name);
+        const isOOO = status.ooo;
+        const loc = status.location;
+
+        const card = document.createElement('div');
+        const isBest = i === 0 && !isOOO;
+        card.className = 'tech-card' + (isBest ? ' best-match' : '') + (isOOO ? ' ooo-card' : '');
+
+        const cats = item.matchedCategories && item.matchedCategories.length
+          ? `Matched: <em>${[...new Set(item.matchedCategories)].join(', ')}</em>`
+          : '<em>General assignment</em>';
+        const note = item.note ? ` — ${item.note}` : '';
+        const locBadge = isOOO
+          ? `<span style="color:#c0392b;font-size:11px;">⛔ Out of Office</span>`
+          : `<span style="color:#555;font-size:11px;">📍 ${loc}</span>`;
+
+        card.innerHTML = `
+          <div class="tech-name">${item.name}</div>
+          <div class="tech-title">${info.title} &nbsp;·&nbsp; ${info.atName}</div>
+          <div class="tech-loc">${locBadge}</div>
+          <div class="tech-reason">${cats}${note}</div>
+        `;
+
+        if (!isOOO) card.onclick = () => selectTech(item.name);
+        container.appendChild(card);
+      });
+
+      document.getElementById('suggest-section').style.display = 'block';
+    }
+
+    function selectTech(name) {
+      if (!pendingTicket) return;
+      incrementWorkload(name);
+      const { ticketNum, requester, summary } = pendingTicket;
+      const result = `${ticketNum} ${requester} ${summary} ${techInfo[name].atName}`;
+      document.getElementById('output').textContent = result;
+      document.getElementById('output-section').style.display = 'block';
+      document.getElementById('suggest-section').style.display = 'none';
+      navigator.clipboard.writeText(result).then(() => {
+        document.getElementById('status').textContent = 'Copied to clipboard!';
+      }).catch(() => {
+        document.getElementById('status').textContent = 'Output ready (copy it manually).';
+      });
+
+      const clientSummary = document.getElementById('client-summary').value.trim();
+      const matchText = (summary + ' ' + clientSummary).trim();
+      const children = buildChildTickets(matchText, ticketNum, requester);
+      renderChildTickets(children);
+    }
+
+    function clearAll() {
+      document.getElementById('input').value = '';
+      document.getElementById('client-summary').value = '';
+      document.getElementById('client-loc').selectedIndex = 0;
+      document.getElementById('error').textContent = '';
+      document.getElementById('suggestions').innerHTML = '';
+      document.getElementById('suggest-section').style.display = 'none';
+      document.getElementById('output-section').style.display = 'none';
+      document.getElementById('child-section').style.display = 'none';
+      document.getElementById('child-tickets').innerHTML = '';
+      document.getElementById('output').textContent = '';
+      document.getElementById('status').textContent = '';
+      pendingTicket = null;
+    }
+
+    buildSchedulePanel();
+  </script>
+</body>
+</html>
